@@ -1,0 +1,50 @@
+In FastAPI, the Request Body is used when you need to send data from a client (like a browser or mobile app) to your API. Unlike query parameters which appear in the URL, the request body is sent as part of the HTTP request, typically in JSON format.
+
+FastAPI uses Pydantic models to define the shape of this data, which gives you automatic validation and documentation.
+
+1. Defining a Request Body
+To declare a request body, you create a class that inherits from Pydantic's BaseModel.
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+
+app = FastAPI()
+
+@app.post("/items/")
+async def create_item(item: Item):
+    return item
+
+
+################################
+
+How it works:
+JSON Parsing: FastAPI reads the request body as JSON.
+Validation: It checks if name is a string and price is a float. If the data is invalid (e.g., a string is sent for the price), FastAPI returns a clear error automatically.
+Editor Support: Because item is typed as the Item class, you get autocomplete inside your function.
+
+2. The Data Flow
+When a request hits your endpoint, FastAPI performs several steps behind the scenes to ensure the data is safe and usable.
+Read: Extracts the JSON from the HTTP request.
+Convert: Transforms JSON types to Python types (e.g., ISO date string becomes a Python datetime object).
+Validate: Ensures required fields are present and types match.
+Respond: If validation fails, it sends a 422 Unprocessable Entity error. If it succeeds, it executes your function.
+
+3. Combining Body, Query, and Path Parameters
+FastAPI is smart enough to distinguish between different types of parameters based on your function signature.
+Path Parameter: Defined in the URL path (e.g., {item_id}).
+Request Body: Defined as a Pydantic model.
+Query Parameter: A singular type (like int or str) not found in the path.
+
+
+@app.put("/items/{item_id}")
+async def update_item(item_id: int, item: Item, q: str | None = None):
+    result = {"item_id": item_id, **item.model_dump()}
+    if q:
+        result.update({"q": q})
+    return result
