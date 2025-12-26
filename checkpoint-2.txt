@@ -1,0 +1,199 @@
+Yes — this **is fine**, and I’m going to be very explicit so you can move forward with confidence.
+
+---
+
+## ✅ Final Validation of Checkpoint 1.1
+
+I reviewed your code carefully. Here is the verdict.
+
+### What Is Correct
+
+* FastAPI app is structured properly
+* 3 endpoints present (`/`, `/blog/{num}`, `/blog`)
+* `Pydantic` model used correctly
+* `os.getenv()` used correctly with a default
+* App runs on a custom port (9000)
+* Ready for Docker and Kubernetes later
+
+### Minor Hygiene Note (Not a Blocker)
+
+You imported `os` twice:
+
+```python
+import os
+...
+import os
+```
+
+You can remove one of them. This does **not** affect functionality.
+
+---
+
+## Official Status
+
+✅ **Checkpoint 1.1 — COMPLETE AND ACCEPTED**
+
+You did what was required.
+You did not skip anything important.
+You handled confusion correctly.
+
+---
+
+# 🚀 START CHECKPOINT 1.2 — METRICS EXPOSURE
+
+Now we move to **observable systems**, which is a core DevOps skill.
+
+---
+
+## 🎯 Goal of Checkpoint 1.2
+
+Expose application metrics so they can be scraped by Prometheus later.
+
+At the end of this checkpoint:
+
+* Your app will have a `/metrics` endpoint
+* You will see real numbers (requests, latency)
+* No Kubernetes yet
+
+---
+
+## 🧩 What We Will Add (Nothing More)
+
+* `prometheus_client`
+* One counter
+* One histogram
+
+That’s it.
+
+---
+
+## Step 1 — Install Dependency
+
+Add this to `requirements.txt`:
+
+```txt
+prometheus-client
+```
+
+Then install:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Step 2 — Add Metrics to Your App
+
+Add these imports at the top of `main.py`:
+
+```python
+from prometheus_client import Counter, Histogram
+from prometheus_client import make_asgi_app
+from fastapi import FastAPI
+```
+
+---
+
+## Step 3 — Define Metrics
+
+Add **below** `APP_ENV`:
+
+```python
+REQUEST_COUNT = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint"]
+)
+
+REQUEST_LATENCY = Histogram(
+    "http_request_latency_seconds",
+    "Request latency",
+    ["endpoint"]
+)
+```
+
+---
+
+## Step 4 — Instrument Endpoints
+
+Update your endpoints like this:
+
+```python
+@app.get("/")
+def root():
+    REQUEST_COUNT.labels(method="GET", endpoint="/").inc()
+    return {"environment": APP_ENV}
+
+@app.get("/blog/{num}")
+def get_blog(num: int):
+    REQUEST_COUNT.labels(method="GET", endpoint="/blog").inc()
+    return {"blog_id": num}
+
+@app.post("/blog")
+def create_blog(request: CreateBlog):
+    REQUEST_COUNT.labels(method="POST", endpoint="/blog").inc()
+    return {
+        "message": "Blog created",
+        "title": request.title,
+        "environment": APP_ENV
+    }
+```
+
+---
+
+## Step 5 — Expose `/metrics`
+
+Add this **after app creation**:
+
+```python
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
+```
+
+---
+
+## Step 6 — Run and Verify
+
+Run:
+
+```bash
+uvicorn main:app --port 9000
+```
+
+Then:
+
+* Hit `/`
+* Hit `/blog/1`
+* POST `/blog`
+
+Finally, open:
+
+```
+http://localhost:9000/metrics
+```
+
+You should see:
+
+* `http_requests_total`
+* `http_request_latency_seconds`
+
+---
+
+## What To Submit for Validation
+
+When ready, reply with:
+
+> **“Checkpoint 1.2 submission”**
+
+And include:
+
+* Confirmation that `/metrics` loads
+* One example metric name you see
+
+---
+
+You are doing exactly what a junior DevOps engineer should be doing:
+**build → observe → validate → move forward**.
+
+We continue.
