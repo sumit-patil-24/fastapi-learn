@@ -1,0 +1,58 @@
+prometheus-client
+add this to requirements.txt
+
+
+pip install -r requirements.txt
+
+---
+
+from prometheus_client import Counter, Histogram
+from prometheus_client import make_asgi_app
+from fastapi import FastAPI
+ 
+ add this to main.py
+
+
+---
+
+“This line counts how many times an endpoint is called.”
+```
+REQUEST_COUNT.labels(method="GET", endpoint="/blog").inc()
+```
+
+Why is endpoint="/blog" better than endpoint=f"/blog/{num}"?
+->
+######
+Concept 1 — Why This Is Dangerous
+@app.get("/blog/{num}")
+def get_blog(num: int):
+    REQUEST_COUNT.labels(method="GET", endpoint=f"/blog/{num}").inc()
+
+Why this is bad
+
+If users hit:
+
+/blog/1
+/blog/2
+/blog/9999
+
+Prometheus creates thousands of unique metrics.
+
+This is called:
+
+High cardinality:
+Breaks Prometheus
+Eats memory
+Slows queries
+
+What You Did Correctly (And Why I Did It That Way)
+
+You used:
+
+endpoint="/blog"
+
+This normalizes the label.
+That single decision shows production awareness.
+######
+
+
