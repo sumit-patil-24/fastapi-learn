@@ -2,3 +2,4 @@ __pycache__/
 fast-env
 rough-file.txt
 practice/
+.dockerignore
