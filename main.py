@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional
 from prometheus_client import Counter, Histogram, make_asgi_app
+import time
 
 # --------------------
 # Configuration
@@ -35,13 +36,35 @@ app = FastAPI()
 # --------------------
 @app.get("/")
 def root():
+    start_time=time.time()      # start time
+
     REQUEST_COUNT.labels(method="GET", endpoint="/").inc()
-    return {"environment": APP_ENV}
+
+    response= {"environment": APP_ENV}
+
+    duration = time.time() - start_time # stop time
+
+    REQUEST_LATENCY.labels(
+        endpoint="/"
+    ).observe(duration)
+
+    return response
 
 @app.get("/blog/{num}")
 def get_blog(num: int):
+    start_time=time.time()      # start time
+
     REQUEST_COUNT.labels(method="GET", endpoint="/blog").inc()
-    return {"blog_id": num}
+    response= {"blog_id": num}
+
+    duration = time.time() - start_time # stop time
+
+    REQUEST_LATENCY.labels(
+        endpoint="/blog"
+    ).observe(duration)
+
+    return response
+
 
 class CreateBlog(BaseModel):
     title: str
@@ -50,12 +73,24 @@ class CreateBlog(BaseModel):
 
 @app.post("/blog")
 def create_blog(request: CreateBlog):
+    start_time=time.time()      # start time
+
     REQUEST_COUNT.labels(method="POST", endpoint="/blog").inc()
-    return {
+    response= {
         "message": "Blog created",
         "title": request.title,
         "environment": APP_ENV
     }
+
+    duration = time.time() - start_time # stop time
+
+    REQUEST_LATENCY.labels(
+        endpoint="/blog"
+    ).observe(duration)
+
+    return response
+
+
 
 # --------------------
 # Metrics Endpoint
