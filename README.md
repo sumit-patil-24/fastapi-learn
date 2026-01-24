@@ -87,3 +87,113 @@ http://localhost:9090
 2. You must see:
     - Job: fastapi-app
     - State: UP
+
+## 📍 Monitoring Checkpoint M3 — Grafana
+🎯 Goal: 
+By the end of this checkpoint, you must be able to say: “I can visualize application metrics using Grafana dashboards.”
+
+
+## 🔹 Step 1 — Run Grafana (Docker)
+```
+docker run -d \
+  --name grafana \
+  --network monitoring-net \
+  -p 3000:3000 \
+  grafana/grafana:9.0.0
+```
+
+Verify:
+```
+http://localhost:3000
+```
+
+Login:
+  - user: admin
+  - password: admin
+
+## 🔹 Step 2 — Add Prometheus as Data Source
+
+In Grafana UI:
+  - Settings → Data Sources
+  - Add data source → Prometheus
+
+- URL:
+```
+http://prometheus:9090
+```
+
+Save & Test → must be green
+
+---
+
+###########
+## 2️⃣ Go to Explore (not Dashboard)
+
+Grafana left menu → Explore
+  - Select Prometheus datasource
+  - In query box, type:
+```
+up
+```
+Click Run query
+
+Expected:
+  - One or more green lines
+  - job="fastapi" or job="prometheus"
+This confirms PromQL execution.
+
+
+## 🔹 Step 3 — Create Your First Dashboard:
+
+Create panels for:
+
+### Panel 1 — Request count
+
+Query:
+```
+http_requests_total
+```
+
+### Visualization:
+- Time series
+
+---
+
+### Panel 2 — Requests per endpoint
+
+Query:
+```
+sum by (endpoint) (http_requests_total)
+```
+
+---
+
+## Panel 3 — Latency (95th percentile)
+
+Query:
+```
+histogram_quantile(
+  0.95,
+  sum by (le, endpoint) (http_request_latency_seconds_bucket)
+)
+```
+
+
+
+
+# Errors:
+
+grafana data source connection error:
+  **Unknown error during query transaction. Please check JS console logs.**
+
+## how to dubug:
+# Enter the container as root
+docker exec -it --user root grafana sh
+
+# Now you can install curl
+apk update && apk add curl
+
+# Test your connection
+curl http://prometheus:9090
+
+## note: only **http://prometheus:9090** is working as URL.
