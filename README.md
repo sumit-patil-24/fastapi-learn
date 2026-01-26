@@ -19,7 +19,7 @@ Prometheus (Docker) ---- scrapes every X seconds
 Both containers must be able to talk to each other.
 
 
-##🔹 Step 1 — Create prometheus.yml
+## 🔹 Step 1 — Create prometheus.yml
 
 Create this file at the project root (same level as Dockerfile):
 
@@ -195,5 +195,6 @@ apk update && apk add curl
 
 # Test your connection
 curl http://prometheus:9090
+
 
 ## note: only **http://prometheus:9090** is working as URL.
