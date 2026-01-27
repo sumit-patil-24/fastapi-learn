@@ -181,20 +181,21 @@ histogram_quantile(
 
 
 
-# Errors:
+## Errors:
 
 grafana data source connection error:
   **Unknown error during query transaction. Please check JS console logs.**
 
 ## how to dubug:
-# Enter the container as root
+## Enter the container as root
 docker exec -it --user root grafana sh
 
-# Now you can install curl
+## Now you can install curl
 apk update && apk add curl
 
-# Test your connection
+## Test your connection
 curl http://prometheus:9090
 
 
 ## note: only **http://prometheus:9090** is working as URL.
+
