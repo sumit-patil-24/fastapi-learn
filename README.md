@@ -126,7 +126,7 @@ Save & Test → must be green
 
 ---
 
-###########
+
 ## 2️⃣ Go to Explore (not Dashboard)
 
 Grafana left menu → Explore
@@ -161,7 +161,6 @@ http_requests_total
 
 ### Panel 2 — Requests per endpoint
 
-Query:
 ```
 sum by (endpoint) (http_requests_total)
 ```
@@ -170,15 +169,126 @@ sum by (endpoint) (http_requests_total)
 
 ## Panel 3 — Latency (95th percentile)
 
-Query:
+```
+histogram_quantile(0.95, rate(http_request_latency_seconds_bucket[1m]))
+
+```
+Mental picture:
+  - 100 requests come in
+  - 95 finished faster than this number
+  - 5 were slower
+
+📌 Grafana graph meaning:
+  - Smooth line → stable service
+  - Sudden jump → CPU, DB, network, or code issue
+
+
+---
+
+
+# Queries
+
+## Verify Data Is Coming (Sanity Check)
+
+### Before dashboards, always verify raw data.
+
+## Step 1: Open Grafana
+  - Go to Explore
+  - Select Prometheus datasource
+
+## Step 2: Run these queries one by one
+1️ Is Prometheus scraping anything?
+```
+up
+```
+Expected:
+  - Value = 1 for your FastAPI target
+  - If 0 → service is down or scrape config wrong
+
+This is always the first query in real life.
+
+---
+
+## Request Count Panel (Traffic)
+We now visualize how many requests your app is handling.
+
+## Metric used
+```
+http_requests_total
+```
+But raw counters are useless → we use rate.
+
+
+## Correct query
+```
+rate(http_requests_total[1m])
+```
+This means:
+  - “Requests per second”
+  - Calculated over last 1 minute
+
+## Add labels (better)
+```
+rate(http_requests_total{endpoint="/"}[1m])
+```
+
+## 📌 Create Panel
+  - Panel type: Time series
+  - Title: HTTP Requests/sec
+  - Unit: req/s
+✅ Checkpoint rule:
+If traffic spikes, graph must spike.
+
+---
+
+## Request Latency Panel (Performance)
+Now we measure how slow or fast your app is.
+
+## Metric used
+```
+http_request_latency_seconds_bucket
+```
+This is a Histogram, so we use histogram_quantile.
+
+### Correct query (P95 latency)
 ```
 histogram_quantile(
   0.95,
-  sum by (le, endpoint) (http_request_latency_seconds_bucket)
+  rate(http_request_latency_seconds_bucket[1m])
 )
 ```
 
+Meaning:
+  - 95% of requests finish under this time
+  - This is industry standard
 
+## For specific endpoint
+```
+histogram_quantile(
+  0.95,
+  rate(http_request_latency_seconds_bucket{endpoint="/"}[1m])
+)
+```
+## 📌 Create Panel
+  - Panel type: Time series
+  - Title: P95 Request Latency
+  - Unit: seconds
+✅ If latency suddenly jumps → something is wrong.
+
+---
+
+## Single Value Health Panel
+```
+sum(rate(http_requests_total[1m]))
+```
+### Panel settings
+  - Panel type: Stat
+  - Title: Total Requests/sec
+  - Unit: req/s
+
+# P95 latency means that 95% of all user requests are faster than a specific value, while the slowest 5% take longer.
+
+---
 
 
 ## Errors:
@@ -187,15 +297,31 @@ grafana data source connection error:
   **Unknown error during query transaction. Please check JS console logs.**
 
 ## how to dubug:
-## Enter the container as root
+### Enter the container as root
+```
 docker exec -it --user root grafana sh
+```
 
-## Now you can install curl
+### Now you can install curl
+```
 apk update && apk add curl
+```
 
-## Test your connection
+### Test your connection
+```
 curl http://prometheus:9090
+```
 
 
-## note: only **http://prometheus:9090** is working as URL.
+### note: only **http://prometheus:9090** is working as URL.
 
+### for some of our queries rate() requires continuous changes over time.
+- Generate continuous traffic
+```
+while true; do
+  curl http://localhost:9000/ > /dev/null
+  sleep 0.2
+done
+```
+after it **rate(http_request_latency_seconds_bucket[1m])**
+will work
