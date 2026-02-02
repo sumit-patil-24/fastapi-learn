@@ -277,6 +277,43 @@ You will see:
     summary: "High latency detected"
     description: "P95 latency is above 1 second for 2 minutes"
 ```
+### `histogram_quantile(0.95, …)`
+
+Means:
+
+> “95% of users are slower than this”
+
+This is **SRE-style alerting**, not beginner stuff.
+
+---
+
+### `rate(...[1m])`
+
+Why?
+
+* Histogram buckets are counters
+* Counters must be converted into rates
+
+No `rate()` → **wrong alert**
+
+---
+
+### `> 1`
+
+Threshold:
+
+* Users waiting more than **1 second**
+
+---
+
+### `for: 2m`
+
+We tolerate:
+
+* small spikes
+* short bursts
+
+Alert only if **persistent pain**
 
 ---
 
@@ -286,3 +323,46 @@ You will see:
 * Uses **rate()**
 * Uses **for**
 * Tied to **user experience**
+
+
+## Why Alerts Are NOT Business Traffic
+
+* `/metrics` calls are:
+
+  * machine-to-machine
+  * internal
+  * predictable
+
+So:
+
+> Never alert on `/metrics` latency or count.
+
+Good monitoring **excludes noise**.
+
+---
+
+
+# 🔎 Verify Inside Container (Optional but Powerful)
+
+Run:
+
+```bash
+docker exec -it prometheus sh
+```
+
+Then:
+
+```sh
+ls /etc/prometheus
+```
+
+You **must see**:
+
+```
+alerts.yml
+prometheus.yml
+```
+
+If you don’t → Prometheus cannot load alerts.
+
+---

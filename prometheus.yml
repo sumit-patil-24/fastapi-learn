@@ -1,7 +1,17 @@
 global:
-  scrape_interval: 5s
+  scrape_interval: 15s
+
+rule_files:
+  - "alerts.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
 
 scrape_configs:
-  - job_name: "fastapi-app"
+  - job_name: "fastapi"
     static_configs:
       - targets: ["fastapi-app:9000"]

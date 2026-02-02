@@ -1,0 +1,26 @@
+groups:
+- name: fastapi-alerts
+  rules:
+  
+  - alert: FastAPIInstanceDown
+    expr: up == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "FastAPI service is down"
+      description: "FastAPI has been unreachable for more than 1 minute"
+
+  - alert: HighLatencyP95
+    expr: |
+      histogram_quantile(
+        0.95,
+        rate(http_request_latency_seconds_bucket[1m])
+      ) > 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High latency detected"
+      description: "P95 latency is above 1 second for 2 minutes"
+ 
