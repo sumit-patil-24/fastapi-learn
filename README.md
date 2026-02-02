@@ -366,3 +366,102 @@ prometheus.yml
 If you don’t → Prometheus cannot load alerts.
 
 ---
+
+## Docker command to run with alert rules
+
+```
+docker run -d \
+  --name prometheus \
+  --network monitoring-net \
+  -p 9090:9090 \
+  -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+  -v $(pwd)/alerts.yml:/etc/prometheus/alerts.yml \
+  prom/prometheus
+
+```
+
+# Checkpoint M6 — Alertmanager
+
+***Alertmanager decides:***
+  - Who should know?
+  - How should they know?
+  - Should similar alerts be grouped?
+  - Should alerts be silenced?
+
+**📌 Prometheus never sends emails / Slack**
+**📌 Alertmanager never queries metrics**
+They have strictly separate responsibilities.
+
+## They have strictly separate responsibilities
+```
+FastAPI app
+   ↓
+/metrics endpoint
+   ↓
+Prometheus (scrape + rules)
+   ↓
+Alertmanager (route + notify)
+   ↓
+Human (Slack / Email / Pager)
+
+```
+
+## Alertmanager does NOT read Prometheus alerts automatically
+
+### Prometheus must be explicitly told:
+> “Send alerts to Alertmanager at this address”
+
+That is why Alertmanager is useless alone.
+
+---
+
+## Alertmanager config file (alertmanager.yml)
+
+We will start with simplest possible config.
+```
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: "default-receiver"
+
+receivers:
+- name: "default-receiver"
+```
+
+* 📌 This config:
+  - accepts alerts
+---
+
+
+
+## Network requirement
+
+Prometheus and Alertmanager must be on same Docker network.
+---
+
+
+## How Prometheus will talk to Alertmanager
+Your prometheus.yml must include:
+```
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+```
+
+***📌 Note:***
+  - alertmanager is the container name
+  - Docker DNS resolves it automatically inside network
+
+
+### command to run alertmanaget in docker
+```
+docker run -d \
+  --name alertmanager \
+  --network monitoring-net \
+  -p 9093:9093 \
+  -v $(pwd)/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
+  prom/alertmanager
+```
