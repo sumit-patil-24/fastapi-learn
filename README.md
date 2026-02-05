@@ -286,4 +286,3 @@ receivers:
     send_resolved: true
 ```
 
-https://hooks.slack.com/services/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
