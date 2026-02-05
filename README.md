@@ -1,383 +1,289 @@
+* To copy a file from your current local directory to a Docker container, use the docker cp command with a relative path for the source. 
+```
+docker cp ./<source_file_path> <container_name_or_id>:<destination_path>
+```
 
-# SLI, SLO, SLA & Alerting Philosophy
 
+# 📌 Checkpoint M7 — Latency-Based Alerts (Prometheus → Alertmanager)
 
-Explain SLI, SLO, SLA clearly 
+This checkpoint answers **one real production question**:
 
-Understand why alerts are tied to SLOs
-
-Know why “zero downtime” is unrealistic
-
-Understand error budgets
-
-Explain why not every issue should alert
-
+> “My app is UP, but users say it is SLOW — how do I detect that?”
 
 ---
 
-Companies don’t monitor systems because they love graphs.
-They monitor systems because:
-  - Users expect reliability
+## 1️⃣ What problem latency alerts solve
+
+* `up == 1` → app is reachable
+* ❌ But response time may be **too high**
+* Users suffer **before** downtime happens
+
+So we alert on **latency**, not availability.
 
 ---
 
-## 1️⃣ SLI — Service Level Indicator
+## 2️⃣ Metric we already have (no new instrumentation)
 
-### Definition
-A metric that measures user experience
+From FastAPI you already exposed:
 
-Examples:- 
-  - Request success rate
-  - Request latency
-  - Availability
-
-Examples in Prometheus:-
+```python
+REQUEST_LATENCY = Histogram(
+    "http_request_latency_seconds",
+    "Request latency",
+    ["endpoint"]
+)
 ```
-http_requests_total
-http_request_latency_seconds
-up
-```
-👉 SLI = WHAT we measure
+
+Prometheus automatically converts this into:
+
+* `http_request_latency_seconds_bucket`
+* `http_request_latency_seconds_sum`
+* `http_request_latency_seconds_count`
+
+👉 **Latency alerts always use `_bucket`**
 
 ---
 
-## 2️⃣ SLO — Service Level Objective
+## 3️⃣ What “P95 latency” really means (simple)
 
-### Definition
-A target value for an SLI
+**P95 = 95th percentile latency**
 
-Examples:-
-  - 99.9% requests successful
-  - P95 latency < 1 second
-  - Service available 99.95% of time
+Meaning:
 
-👉 SLO = HOW GOOD is good 
+> 95% of requests are faster than this value
+> 5% of requests are slower (worst users)
 
----
-
-## 3️⃣ SLA — Service Level Agreement
-
-### Definition
-A business/legal contract
-
-Examples:
-  - Refunds
-  - Credits
-  - Penalties
-
-👉 SLA is NOT engineering-focused
-👉 Engineers mostly care about SLOs
+This is what companies alert on.
 
 ---
 
-| Term | Meaning            |
-| ---- | ------------------ |
-| SLI  | What we measure    |
-| SLO  | Target reliability |
-| SLA  | Business promise   |
-
----
-
-## 📊 Example (FastAPI Service)
-**SLI**
-  - Request latency
-
-**SLO**
-- 95% of requests must complete in under 1 second
-
-**SLA**
-- If violated → customer refund
-
----
-
-## 🚨 Why Alerts Are Based on SLOs (Not Metrics)
-
-**Bad alert**:
-```
-CPU usage is 80%
-```
-
-**Good alert:**
-```
-Users are experiencing slow responses
-```
-
-Alerts should trigger when SLO is at risk, not when a metric moves.
-
----
-
-## 🧮 Error Budget (Critical Concept)
-
-### Definition
-Allowed amount of failure within SLO (without violating its Service Level Objective)
-
-Example:
-  - SLO = 99.9% availability
-  - Allowed failure = 0.1%
-
-This 0.1% is your error budget.
-
----
-
-## ⚠️ Alert Fatigue (Real Industry Problem)
-
-**Too many alerts cause:**
-  - Engineers ignoring alerts
-  - Slower response
-  - Burnout
-  - Missed real incidents
-
-That’s why:
-Fewer, meaningful alerts win
-
----
-
-## 🧠 Alerting  (Golden Rules)
-
-**Rule 1:** Alert only when human action is required
-**Rule 2:** Alert when user experience is affected
-**Rule 3:** Alert when SLO is at risk
-**Rule 4:** Metrics explain problems — alerts notify them
-
----
-
-## 📉 Example: Bad vs Good Alert
-❌ Bad
-```
-Latency > 300ms for 10 seconds
-```
-
-✅ Good
-```
-P95 latency > 1s for 2 minutes
-```
-
----
-
-### Alerts are defined in a file, usually:
-```
-alerts.yml
-```
-And Prometheus loads it via prometheus.yml.
-
-## 🧱 Step 1: Create alerts.yml
-```
-groups:
-- name: fastapi-alerts
-  rules:
-
-  - alert: FastAPIInstanceDown
-    expr: up == 0
-    for: 1m
-    labels:
-      severity: critical
-    annotations:
-      summary: "FastAPI service is down"
-      description: "FastAPI has been unreachable for more than 1 minute"
-```
-
----
-
-## 🧠 Understand Every Line (Important)
-
-### `alert`
-
-Name of the alert
-
-### `expr`
-
-PromQL condition
+## 4️⃣ PromQL for P95 latency (core query)
 
 ```promql
-up == 0
+histogram_quantile(
+  0.95,
+  rate(http_request_latency_seconds_bucket[1m])
+)
 ```
 
-Means:
+### Read it in English:
 
-> Target is unreachable
-
----
-
-### `for: 1m`
-
-Alert fires **only if condition stays true for 1 minute**
-
-Prevents false positives.
+* Look at latency buckets
+* Over last 1 minute
+* Calculate the 95th percentile
 
 ---
 
-### `labels`
+## 5️⃣ Latency Alert Rule (`alerts.yml`)
 
-Metadata for routing later (Alertmanager).
-
----
-
-### `annotations`
-
-Human-readable message.
-
----
-
-
-## 🧩 Step 2: Load Alerts in Prometheus
-
-Edit `prometheus.yml`:
+Add **this rule** (below your AppDown alert):
 
 ```yaml
-rule_files:
-  - "alerts.yml"
+- alert: HighRequestLatency
+  expr: histogram_quantile(
+          0.95,
+          rate(http_request_latency_seconds_bucket[1m])
+        ) > 0.5
+  for: 1m
+  labels:
+    severity: warning
+  annotations:
+    summary: "High request latency detected"
+    description: "P95 latency is above 500ms for 1 minute."
 ```
 
-Restart Prometheus.
+### Threshold logic
+
+* `0.5` → 500ms
+* Adjust later (this is realistic for FastAPI)
+
+
+Always reload container after rule changes.
 
 ---
 
-## 🔍 Step 3: Verify Alerts UI
+## 7️⃣ How to trigger this alert (important)
 
-Open:
+Generate **slow traffic**.
 
-```text
-http://localhost:9090/alerts
+Example (simulate load):
+
+```bash
+while true; do curl localhost:9000/; sleep 0.1; done
+```
+
+Or add artificial delay in FastAPI (temporary):
+
+```python
+import time
+time.sleep(0.8)
+```
+
+---
+
+## 8️⃣ Verify alert lifecycle
+
+### In Prometheus:
+
+```bash
+curl localhost:9090/api/v1/alerts
 ```
 
 You should see:
 
-* `FastAPIInstanceDown`
-* Status: **inactive**
+* `HighRequestLatency`
+* `state: pending` → then `firing`
 
----
-
-## 🧪 Step 4: Trigger the Alert (Practice)
-
-1. Stop FastAPI container
-2. Wait 1 minute
-3. Go to Prometheus → Alerts tab
-
-You will see:
-
-* `pending` → `firing`
-
-🔥 **This is real alerting**
-
----
-
-## 📈 Step 5: Latency-Based Alert (Your Histogram Use)
-
-```yaml
-- alert: HighLatencyP95
-  expr: |
-    histogram_quantile(
-      0.95,
-      rate(http_request_latency_seconds_bucket[1m])
-    ) > 1
-  for: 2m
-  labels:
-    severity: warning
-  annotations:
-    summary: "High latency detected"
-    description: "P95 latency is above 1 second for 2 minutes"
-```
-### `histogram_quantile(0.95, …)`
-
-Means:
-
-> “95% of users are slower than this”
-
-This is **SRE-style alerting**, not beginner stuff.
-
----
-
-### `rate(...[1m])`
-
-Why?
-
-* Histogram buckets are counters
-* Counters must be converted into rates
-
-No `rate()` → **wrong alert**
-
----
-
-### `> 1`
-
-Threshold:
-
-* Users waiting more than **1 second**
-
----
-
-### `for: 2m`
-
-We tolerate:
-
-* small spikes
-* short bursts
-
-Alert only if **persistent pain**
-
----
-
-## 🧠 Why This Alert Is GOOD
-
-* Uses **P95**, not average
-* Uses **rate()**
-* Uses **for**
-* Tied to **user experience**
-
-
-## Why Alerts Are NOT Business Traffic
-
-* `/metrics` calls are:
-
-  * machine-to-machine
-  * internal
-  * predictable
-
-So:
-
-> Never alert on `/metrics` latency or count.
-
-Good monitoring **excludes noise**.
-
----
-
-
-# 🔎 Verify Inside Container (Optional but Powerful)
-
-Run:
+### In Alertmanager:
 
 ```bash
-docker exec -it prometheus sh
+curl localhost:9093/api/v2/alerts
 ```
 
-Then:
-
-```sh
-ls /etc/prometheus
-```
-
-You **must see**:
-
-```
-alerts.yml
-prometheus.yml
-```
-
-If you don’t → Prometheus cannot load alerts.
+If visible → pipeline works.
 
 ---
 
-## Docker command to run with alert rules
+## What we are doing (1-line goal)
+
+> When a Prometheus alert fires → a message appears in a Slack channel.
+
+That’s it.
+
+---
+
+## Step 1️⃣ Create Slack Incoming Webhook (outside terminal)
+
+You do this **once**.
+
+1. Go to **Slack → Settings → Apps**
+2. Search **“Incoming Webhooks”**
+3. Add it to your workspace
+4. Choose a channel (example: `#alerts`)
+5. Copy the **Webhook URL**
+
+It looks like:
 
 ```
+https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXX
+```
+
+⚠️ This URL is **secret** (like a password).
+
+---
+
+## Step 2️⃣ Alertmanager config (`alertmanager.yml`)
+
+Create / update this file:
+
+```yaml
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: "slack-notifications"
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+- name: "slack-notifications"
+  slack_configs:
+  - api_url: "PASTE_YOUR_SLACK_WEBHOOK_URL_HERE"
+    channel: "#alerts"
+    send_resolved: true
+    title: "{{ .CommonAnnotations.summary }}"
+    text: >-
+      {{ range .Alerts }}
+      *Alert:* {{ .Annotations.description }}
+      *Status:* {{ .Status }}
+      *StartsAt:* {{ .StartsAt }}
+      {{ end }}
+```
+
+
+
+## Step 3️⃣ Run / Restart Alertmanager (with config mounted)
+
+```bash
+docker rm -f alertmanager
+
 docker run -d \
-  --name prometheus \
+  --name alertmanager \
   --network monitoring-net \
-  -p 9090:9090 \
-  -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
-  -v $(pwd)/alerts.yml:/etc/prometheus/alerts.yml \
-  prom/prometheus
+  -p 9093:9093 \
+  -v $(pwd)/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
+  prom/alertmanager
+```
 
+Verify:
+
+```bash
+curl localhost:9093
 ```
 
 ---
+
+
+## Step 6️⃣ Slack verification (MOST IMPORTANT)
+
+Open Slack → `#alerts`
+
+You should see:
+
+* Alert name
+* Description
+* Status = firing
+
+Then remove `sleep` → wait → Slack gets **RESOLVED** message.
+
+This confirms **full alert lifecycle**.
+
+
+---
+
+
+
+## Gmail Requirements (READ CAREFULLY)
+
+You **CANNOT** use normal Gmail password.
+
+You must use:
+
+### 🔐 Gmail App Password
+
+Steps:
+
+1. Enable **2-Step Verification**
+2. Create **App Password**
+3. Use that password in Alertmanager
+
+📌 Without this → email will NEVER work.
+
+---
+
+## Minimal Working Email Config (Correct Way)
+
+### alertmanager.yml (EMAIL ONLY)
+
+```yaml
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'your-email@gmail.com'
+  smtp_auth_username: 'your-email@gmail.com'
+  smtp_auth_password: 'APP_PASSWORD_HERE'
+  smtp_require_tls: true
+
+route:
+  receiver: email-notifications
+
+receivers:
+- name: email-notifications
+  email_configs:
+  - to: 'receiver-email@gmail.com'
+    send_resolved: true
+```
+
+https://hooks.slack.com/services/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

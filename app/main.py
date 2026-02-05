@@ -37,6 +37,7 @@ app = FastAPI()
 @app.get("/")
 def root():
     start_time=time.time()      # start time
+    time.sleep(0.9)
 
     REQUEST_COUNT.labels(method="GET", endpoint="/").inc()
 
