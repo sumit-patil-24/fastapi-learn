@@ -1,0 +1,28 @@
+# --- STAGE 1: Build Stage ---
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+COPY requirements.txt .
+# Install to a specific directory to make copying easier
+RUN pip install --no-cache-dir --target=/app/package -r requirements.txt
+COPY . .
+
+# --- STAGE 2: Distroless Stage ---
+# We use the Python 3 distroless image
+FROM gcr.io/distroless/python3-debian12
+
+WORKDIR /app
+
+# Copy the libraries and your code from the builder
+COPY --from=builder /app/package /app/package
+COPY --from=builder /app /app
+
+# Set Python Path so it finds the libraries in the /package folder
+ENV PYTHONPATH=/app/package
+
+# Distroless images usually run as a non-root user (nonroot) by default
+USER nonroot
+
+# Note: You cannot use "uvicorn" command directly because there is no shell.
+# You must call the python module directly.
+CMD ["main.py"]
