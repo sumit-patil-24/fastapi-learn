@@ -35,5 +35,10 @@ def create_blog(request: CreateBlog):
         "environment": APP_ENV
     }
 
+@app.get("/crash")
+def crash():
+    import os
+    os._exit(1)  # Forcefully kills the python process
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=APP_PORT)
