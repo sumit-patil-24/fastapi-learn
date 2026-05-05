@@ -14,7 +14,26 @@ APP_PORT = int(os.getenv("APP_PORT", 9000))
 
 app = FastAPI()
 
-# ... (rest of your routes stay the same)
+@app.get("/")
+def root():
+    return {"environment": APP_ENV, "PORT": APP_PORT}
+
+@app.get("/blog/{num}")
+def get_blog(num: int):
+    return {"blog_id": num}
+
+class CreateBlog(BaseModel):
+    title: str
+    body: str
+    published: Optional[bool] = True
+
+@app.post("/blog")
+def create_blog(request: CreateBlog):
+    return {
+        "message": "Blog created",
+        "title": request.title,
+        "environment": APP_ENV
+    }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=APP_PORT)
